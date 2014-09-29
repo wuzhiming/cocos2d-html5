@@ -801,6 +801,13 @@ ccui.TextField = ccui.Widget.extend(/** @lends ccui.TextField# */{
 
     _getFont: function () {
         return this._textFieldRenderer._getFont();
+    },
+
+    _transformForRenderer: function(){
+
+        this._adaptRenderers();
+        cc.Node.prototype.transform.call(this);
+        this._textFieldRenderer._transformForRenderer();
     }
 });
 

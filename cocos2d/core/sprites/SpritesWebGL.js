@@ -63,6 +63,10 @@ cc._tmp.WebGLSprite = function () {
         self._softInit(fileName, rect, rotated);
     };
 
+    _p._initRendererCmd = function(){
+        this._rendererCmd = new cc.TextureRenderCmdWebGL(this);
+    };
+
     _p.setBlendFunc = function (src, dst) {
         var locBlendFunc = this._blendFunc;
         if (dst === undefined) {
@@ -249,8 +253,8 @@ cc._tmp.WebGLSprite = function () {
         } else {
             // self rendering
             // Atlas: Vertex
-            var x1 = 0 + _t._offsetPosition.x;
-            var y1 = 0 + _t._offsetPosition.y;
+            var x1 = _t._offsetPosition.x;
+            var y1 = _t._offsetPosition.y;
             var x2 = x1 + locRect.width;
             var y2 = y1 + locRect.height;
 

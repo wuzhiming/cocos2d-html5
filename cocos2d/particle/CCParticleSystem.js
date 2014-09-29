@@ -373,6 +373,13 @@ cc.ParticleSystem = cc.Node.extend(/** @lends cc.ParticleSystem# */{
         }
     },
 
+    _initRendererCmd: function(){
+        if(cc._renderType === cc._RENDER_TYPE_CANVAS)
+            this._rendererCmd = new cc.ParticleRenderCmdCanvas(this);
+        else
+            this._rendererCmd = new cc.ParticleRenderCmdWebGL(this);
+    },
+
     /**
      * initializes the indices for the vertices
      */
@@ -544,6 +551,8 @@ cc.ParticleSystem = cc.Node.extend(/** @lends cc.ParticleSystem# */{
      */
     setDrawMode:function (drawMode) {
         this.drawMode = drawMode;
+        if(this._rendererCmd)
+            this._rendererCmd._drawMode = drawMode;
     },
 
     /**
@@ -560,6 +569,8 @@ cc.ParticleSystem = cc.Node.extend(/** @lends cc.ParticleSystem# */{
      */
     setShapeType:function (shapeType) {
         this.shapeType = shapeType;
+        if(this._rendererCmd)
+            this._rendererCmd._shapeType = shapeType;
     },
 
     /**

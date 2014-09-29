@@ -116,6 +116,13 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
     _clearColorStr:null,
     _className:"RenderTexture",
 
+     //for WebGL
+    _beginWithClearCommand: null,
+    _clearDepthCommand: null,
+    _clearCommand: null,
+    _beginCommand: null,
+    _endCommand: null,
+
     /**
      * creates a RenderTexture object with width and height in Points and a pixel format, only RGB and RGBA formats are valid
      * Constructor of cc.RenderTexture for Canvas
@@ -146,6 +153,15 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
             format = format || cc.Texture2D.PIXEL_FORMAT_RGBA8888;
             depthStencilFormat = depthStencilFormat || 0;
             this.initWithWidthAndHeight(width, height, format, depthStencilFormat);
+        }
+    },
+
+    _initRendererCmd: function(){
+        //TODO need merge in some code
+        if(cc._renderType === cc._RENDER_TYPE_CANVAS)
+            this._rendererCmd = new cc.RenderTextureRenderCmdCanvas(this);
+        else{
+            this._rendererCmd = new cc.RenderTextureRenderCmdWebGL(this);
         }
     },
 
@@ -230,6 +246,10 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
         this.autoDraw = false;
         // add sprite for backward compatibility
         this.addChild(locSprite);
+        var locCmd = this._rendererCmd;
+        locCmd._sprite = this.sprite;
+        locCmd._cacheCanvas = this._cacheCanvas;
+        locCmd._cacheContext = this._cacheContext;
         return true;
     },
 
@@ -276,9 +296,8 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
 
         if (cc.configuration.checkForGLExtension("GL_QCOM")) {
             this._textureCopy = new cc.Texture2D();
-            if (!this._textureCopy) {
+            if (!this._textureCopy)
                 return false;
-            }
             this._textureCopy.initWithData(data, this._pixelFormat, powW, powH, cc.size(width, height));
         }
 
@@ -331,8 +350,11 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
     begin: null,
 
     _beginForCanvas: function () {
-        cc._renderContext = this._cacheContext;
-        cc.view._setScaleXYForRenderTexture();
+        //old code
+        //cc._renderContext = this._cacheContext;
+        //cc.view._setScaleXYForRenderTexture();
+
+        cc.renderer._isCacheToCanvasOn = true;
 
         /*// Save the current matrix
          cc.kmGLMatrixMode(cc.KM_GL_PROJECTION);
@@ -342,6 +364,8 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
     },
 
     _beginForWebGL: function () {
+        cc.renderer._isCacheToBufferOn = true;
+
         // Save the current matrix
         cc.kmGLMatrixMode(cc.KM_GL_PROJECTION);
         cc.kmGLPushMatrix();
@@ -473,8 +497,11 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
     end: null,
 
     _endForCanvas: function () {
-        cc._renderContext = cc._mainRenderContextBackup;
-        cc.view._resetScale();
+        //old code
+        //cc._renderContext = cc._mainRenderContextBackup;
+        //cc.view._resetScale();
+
+        cc.renderer._renderingToCacheCanvas(this._cacheContext);
 
         //TODO
         /*//restore viewport
@@ -486,6 +513,8 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
     },
 
     _endForWebGL: function () {
+        cc.renderer._renderingToBuffer();
+
         var gl = cc._renderContext;
         var director = cc.director;
         gl.bindFramebuffer(gl.FRAMEBUFFER, this._oldFBO);
@@ -603,13 +632,8 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
             return;
 
         ctx = ctx || cc._renderContext;
-        ctx.save();
-
-        this.draw(ctx);                                                   // update children of RenderTexture before
         this.transform(ctx);
-        this.sprite.visit();                                             // draw the RenderTexture
-
-        ctx.restore();
+        this.sprite.visit(ctx);                                             // draw the RenderTexture
 
         this.arrivalOrder = 0;
     },
@@ -622,18 +646,23 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
 
         cc.kmGLPushMatrix();
 
-        var locGrid = this.grid;
+/*        var locGrid = this.grid;
         if (locGrid && locGrid.isActive()) {
             locGrid.beforeDraw();
             this.transformAncestors();
-        }
+        }*/
 
         this.transform(ctx);
-        this.sprite.visit();
-        this.draw(ctx);
+        //this.toRenderer();
 
-        if (locGrid && locGrid.isActive())
-            locGrid.afterDraw(this);
+        this.sprite.visit();
+        //this.draw(ctx);
+        if(this._rendererCmd)
+            cc.renderer.pushRenderCommand(this._rendererCmd);
+
+        //TODO GridNode
+/*        if (locGrid && locGrid.isActive())
+            locGrid.afterDraw(this);*/
 
         cc.kmGLPopMatrix();
 
@@ -671,7 +700,6 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
                 if (getChild != selfSprite)
                     getChild.visit();
             }
-
             this.end();
         }
     },

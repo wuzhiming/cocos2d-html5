@@ -90,7 +90,14 @@
                     this.initWithSpriteFrame(fileName);
                 }
             }
+            //this._transformCmd = new cc.PhysicsSpriteTransformCmdCanvas(this);
+            //cc.rendererCanvas.pushRenderCommand(this._transformCmd);
         },
+
+        //visit: function(){
+        //    cc.Sprite.prototype.visit.call(this);
+        //    cc.rendererCanvas.pushRenderCommand(this._transformCmd);
+        //},
 
         /**
          * set body
@@ -199,6 +206,7 @@
             this._ignoreBodyRotation = b;
         }
     };
+
     var chipmunkAPI = {
         _ignoreBodyRotation:false,
         _body:null, //physics body
@@ -215,7 +223,7 @@
          * var physicsSprite1 = cc.PhysicsSprite.create("res/HelloHTML5World.png");
          * var physicsSprite2 = new cc.PhysicsSprite("res/HelloHTML5World.png",cc.rect(0,0,480,320));
          *
-         * 2.Create a sprite with a sprite frame name. Must add "#" before fame name.
+         * 2.Create a sprite with a sprite frame name. Must add "#" before frame name.
          * var physicsSprite = new cc.PhysicsSprite('#grossini_dance_01.png');
          *
          * 3.Create a sprite with a sprite frame
@@ -253,6 +261,13 @@
                     this.initWithSpriteFrame(fileName);
                 }
             }
+            this._transformCmd = new cc.PhysicsSpriteTransformCmd(this);
+            cc.renderer.pushRenderCommand(this._transformCmd);
+        },
+
+        visit: function(){
+            cc.Sprite.prototype.visit.call(this);
+            cc.renderer.pushRenderCommand(this._transformCmd);
         },
 
         /**
@@ -371,7 +386,7 @@
 
         /**
          * get the affine transform matrix of node to parent coordinate frame
-         * @retur {cc.AffineTransform}
+         * @return {cc.AffineTransform}
          */
         getNodeToParentTransform:function () {
             if(cc._renderType === cc._RENDER_TYPE_CANVAS)
@@ -460,7 +475,7 @@
         setDirty: function(){ },
 
         /**
-         * set whether to ignore ratation of body
+         * set whether to ignore rotation of body
          * @param {Boolean} b
          */
         setIgnoreBodyRotation: function(b) {

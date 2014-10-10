@@ -364,18 +364,20 @@ cc.ParticleSystem = cc.Node.extend(/** @lends cc.ParticleSystem# */{
             this._quadsArrayBuffer = null;
         }
 
-        if (!plistFile || typeof(plistFile) === "number") {
+        if (!plistFile || cc.isNumber(plistFile)) {
             var ton = plistFile || 100;
-            if (cc._renderType === cc._RENDER_TYPE_WEBGL)
-                this.setDrawMode(cc.ParticleSystem.TEXTURE_MODE);
+            this.setDrawMode(cc.ParticleSystem.TEXTURE_MODE);
             this.initWithTotalParticles(ton);
         } else if (plistFile) {
             this.initWithFile(plistFile);
         }
     },
 
-    initRendererCmd: function(){
-        this._rendererCmd = new cc.ParticleRenderCmdCanvas(this);
+    _initRendererCmd: function(){
+        if(cc._renderType === cc._RENDER_TYPE_CANVAS)
+            this._rendererCmd = new cc.ParticleRenderCmdCanvas(this);
+        else
+            this._rendererCmd = new cc.ParticleRenderCmdWebGL(this);
     },
 
     /**
@@ -1610,14 +1612,14 @@ cc.ParticleSystem = cc.Node.extend(/** @lends cc.ParticleSystem# */{
                 // Try to get the texture from the cache
                 var textureName = locValueForKey("textureFileName", dictionary);
                 var imgPath = cc.path.changeBasename(this._plistFile, textureName);
-                var tex = cc.textureCache.textureForKey(imgPath);
+                var tex = cc.textureCache.getTextureForKey(imgPath);
 
                 if (tex) {
                     this.setTexture(tex);
                 } else {
                     var textureData = locValueForKey("textureImageData", dictionary);
 
-                    if (textureData && textureData.length == 0) {
+                    if (!textureData || textureData.length === 0) {
                         tex = cc.textureCache.addImage(imgPath);
                         if (!tex)
                             return false;
@@ -1647,7 +1649,7 @@ cc.ParticleSystem = cc.Node.extend(/** @lends cc.ParticleSystem# */{
 
                         cc.textureCache.cacheImage(imgPath, canvasObj);
 
-                        var addTexture = cc.textureCache.textureForKey(imgPath);
+                        var addTexture = cc.textureCache.getTextureForKey(imgPath);
                         if(!addTexture)
                             cc.log("cc.ParticleSystem.initWithDictionary() : error loading the texture");
                         this.setTexture(addTexture);
@@ -1724,6 +1726,11 @@ cc.ParticleSystem = cc.Node.extend(/** @lends cc.ParticleSystem# */{
         return true;
     },
 
+    /**
+     * Unschedules the "update" method.
+     * @function
+     * @see scheduleUpdate();
+     */
     destroyParticleSystem:function () {
         this.unscheduleUpdate();
     },
@@ -2126,11 +2133,11 @@ cc.ParticleSystem = cc.Node.extend(/** @lends cc.ParticleSystem# */{
                     }
 
                     // color
-                    if (!this._dontTint || cc._renderType === cc._RENDER_TYPE_CANVAS) {
-                        selParticle.color.r += (selParticle.deltaColor.r * dt);
-                        selParticle.color.g += (selParticle.deltaColor.g * dt);
-                        selParticle.color.b += (selParticle.deltaColor.b * dt);
-                        selParticle.color.a += (selParticle.deltaColor.a * dt);
+                    if (!this._dontTint || cc._renderType === cc._RENDER_TYPE_WEBGL) {
+                        selParticle.color.r += selParticle.deltaColor.r * dt;
+                        selParticle.color.g += selParticle.deltaColor.g * dt;
+                        selParticle.color.b += selParticle.deltaColor.b * dt;
+                        selParticle.color.a += selParticle.deltaColor.a * dt;
                         selParticle.isChangeColor = true;
                     }
 
@@ -2208,17 +2215,20 @@ cc.ParticleSystem = cc.Node.extend(/** @lends cc.ParticleSystem# */{
             this.postStep();
     },
 
+    /**
+     * update emitter's status (dt = 0)
+     */
     updateWithNoTime:function () {
         this.update(0);
     },
 
-    /**
-     * return the string found by key in dict.
-     * @param {string} key
-     * @param {object} dict
-     * @return {String} "" if not found; return the string if found.
-     * @private
-     */
+    //
+    // return the string found by key in dict.
+    // @param {string} key
+    // @param {object} dict
+    // @return {String} "" if not found; return the string if found.
+    // @private
+    //
     _valueForKey:function (key, dict) {
         if (dict) {
             var pString = dict[key];
@@ -2248,6 +2258,12 @@ cc.ParticleSystem = cc.Node.extend(/** @lends cc.ParticleSystem# */{
         }
     },
 
+    /**
+     * to copy object with deep copy.
+     * returns a clone of action.
+     *
+     * @return {cc.ParticleSystem}
+     */
     clone:function () {
         var retParticle = new cc.ParticleSystem();
 
@@ -2408,14 +2424,14 @@ cc.ParticleSystem = cc.Node.extend(/** @lends cc.ParticleSystem# */{
         else
             context.globalCompositeOperation = 'source-over';
 
+        var element = this._texture.getHtmlElementObj();
+        var locScaleX = cc.view.getScaleX(), locScaleY = cc.view.getScaleY();
+
         for (var i = 0; i < this.particleCount; i++) {
             var particle = this._particles[i];
             var lpx = (0 | (particle.size * 0.5));
 
             if (this.drawMode == cc.ParticleSystem.TEXTURE_MODE) {
-
-                var element = this._texture.getHtmlElementObj();
-
                 // Delay drawing until the texture is fully loaded by the browser
                 if (!element.width || !element.height)
                     continue;
@@ -2429,34 +2445,17 @@ cc.ParticleSystem = cc.Node.extend(/** @lends cc.ParticleSystem# */{
                 var h = this._pointRect.height;
 
                 context.scale(
-                    Math.max((1 / w) * size, 0.000001),
-                    Math.max((1 / h) * size, 0.000001)
+                    Math.max(size * locScaleX / w, 0.000001),
+                    Math.max(size * locScaleY / h, 0.000001)
                 );
-
 
                 if (particle.rotation)
                     context.rotate(cc.degreesToRadians(particle.rotation));
-
                 context.translate(-(0 | (w / 2)), -(0 | (h / 2)));
-                if (particle.isChangeColor) {
-
-                    var cacheTextureForColor = cc.textureCache.getTextureColors(element);
-                    if (cacheTextureForColor) {
-                        // Create another cache for the tinted version
-                        // This speeds up things by a fair bit
-                        if (!cacheTextureForColor.tintCache) {
-                            cacheTextureForColor.tintCache = cc.newElement('canvas');
-                            cacheTextureForColor.tintCache.width = element.width;
-                            cacheTextureForColor.tintCache.height = element.height;
-                        }
-                        cc.generateTintImage(element, cacheTextureForColor, particle.color, this._pointRect, cacheTextureForColor.tintCache);
-                        element = cacheTextureForColor.tintCache;
-                    }
-                }
-
-                context.drawImage(element, 0, 0);
+                var drawElement = particle.isChangeColor ? this._changeTextureColor(element, particle.color, this._pointRect) : element;
+                if(drawElement)
+                    context.drawImage(drawElement, 0, 0);
                 context.restore();
-
             } else {
                 context.save();
                 context.globalAlpha = particle.color.a / 255;
@@ -2473,6 +2472,15 @@ cc.ParticleSystem = cc.Node.extend(/** @lends cc.ParticleSystem# */{
             }
         }
         context.restore();
+    },
+
+    _changeTextureColor: function(element, color, rect){
+        if (!element.tintCache) {
+            element.tintCache = document.createElement('canvas');
+            element.tintCache.width = element.width;
+            element.tintCache.height = element.height;
+        }
+        return cc.generateTintImageWithMultiply(element, color, rect, element.tintCache);
     },
 
     _drawForWebGL:function (ctx) {
@@ -2596,28 +2604,27 @@ cc.ParticleSystem = cc.Node.extend(/** @lends cc.ParticleSystem# */{
         }
         this._quadsArrayBuffer = locQuadsArrayBuffer;
         return true;
-    },
-
-    toRenderer: function(){
-        if(!this._rendererCmd)
-            return;
-
-        var locCmd = this._rendererCmd;
-        locCmd._isBlendAdditive = this.isBlendAdditive();
-        locCmd._drawMode = this.drawMode;
-        locCmd._shapeType = this.shapeType;
-        locCmd._texture = this._texture;
-
-        var locRect = this._pointRect;
-        locCmd._pointRect.x = locRect.x;
-        locCmd._pointRect.y = locRect.y;
-        locCmd._pointRect.width = locRect.width;
-        locCmd._pointRect.height = locRect.height;
     }
-
 });
 
 var _p = cc.ParticleSystem.prototype;
+
+if(cc._renderType === cc._RENDER_TYPE_CANVAS && !cc.sys._supportCanvasNewBlendModes)
+    _p._changeTextureColor = function (element, color, rect) {
+        var cacheTextureForColor = cc.textureCache.getTextureColors(element);
+        if (cacheTextureForColor) {
+            // Create another cache for the tinted version
+            // This speeds up things by a fair bit
+            if (!cacheTextureForColor.tintCache) {
+                cacheTextureForColor.tintCache = document.createElement('canvas');
+                cacheTextureForColor.tintCache.width = element.width;
+                cacheTextureForColor.tintCache.height = element.height;
+            }
+            cc.generateTintImage(element, cacheTextureForColor, color, rect, cacheTextureForColor.tintCache);
+            return cacheTextureForColor.tintCache;
+        }
+        return null
+    };
 
 // Extended properties
 /** @expose */
@@ -2702,12 +2709,25 @@ cc.defineGetterSetter(_p, "texture", _p.getTexture, _p.setTexture);
  *    This plist files can be create manually or with Particle Designer:<br/>
  *    http://particledesigner.71squared.com/<br/>
  * </p>
+ * @deprecated since v3.0 please use new cc.ParticleSysytem(plistFile) instead.
  * @param {String|Number} plistFile
  * @return {cc.ParticleSystem}
  */
 cc.ParticleSystem.create = function (plistFile) {
     return new cc.ParticleSystem(plistFile);
 };
+
+/**
+ * <p> return the string found by key in dict. <br/>
+ *    This plist files can be create manually or with Particle Designer:<br/>
+ *    http://particledesigner.71squared.com/<br/>
+ * </p>
+ * @deprecated since v3.0 please use new cc.ParticleSysytem(plistFile) instead.
+ * @function
+ * @param {String|Number} plistFile
+ * @return {cc.ParticleSystem}
+ */
+cc.ParticleSystem.createWithTotalParticles = cc.ParticleSystem.create;
 
 // Different modes
 /**

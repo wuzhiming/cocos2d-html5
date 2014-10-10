@@ -41,13 +41,13 @@ cc._tmp.WebGLSprite = function () {
     };
 
     _p.updateDisplayedOpacity = function (parentOpacity) {
-        cc.NodeRGBA.prototype.updateDisplayedOpacity.call(this, parentOpacity);
+        cc.Node.prototype.updateDisplayedOpacity.call(this, parentOpacity);
         this.updateColor();
     };
 
     _p.ctor = function (fileName, rect, rotated) {
         var self = this;
-        cc.NodeRGBA.prototype.ctor.call(self);
+        cc.Node.prototype.ctor.call(self);
         self._shouldBeHidden = false;
         self._offsetPosition = cc.p(0, 0);
         self._unflippedOffsetPositionFromCenter = cc.p(0, 0);
@@ -61,6 +61,10 @@ cc._tmp.WebGLSprite = function () {
         self._textureLoaded = true;
 
         self._softInit(fileName, rect, rotated);
+    };
+
+    _p._initRendererCmd = function(){
+        this._rendererCmd = new cc.TextureRenderCmdWebGL(this);
     };
 
     _p.setBlendFunc = function (src, dst) {
@@ -79,7 +83,7 @@ cc._tmp.WebGLSprite = function () {
         if (arguments.length > 0)
             return _t.initWithFile(arguments[0], arguments[1]);
 
-        cc.NodeRGBA.prototype.init.call(_t);
+        cc.Node.prototype.init.call(_t);
         _t.dirty = _t._recursiveDirty = false;
         _t._opacityModifyRGB = true;
 
@@ -123,7 +127,7 @@ cc._tmp.WebGLSprite = function () {
 
         rotated = rotated || false;
 
-        if (!cc.NodeRGBA.prototype.init.call(_t))
+        if (!cc.Node.prototype.init.call(_t))
             return false;
 
         _t._batchNode = null;
@@ -173,7 +177,7 @@ cc._tmp.WebGLSprite = function () {
             rect = cc.rect(0, 0, texture.width, texture.height);
         }
 
-        if(texture) {
+        if(texture && texture.url) {
             var _x, _y;
             if(rotated){
                 _x = rect.x + rect.height;
@@ -274,10 +278,7 @@ cc._tmp.WebGLSprite = function () {
             var locQuad = _t._quad, locParent = _t._parent;
             // If it is not visible, or one of its ancestors is not visible, then do nothing:
             if (!_t._visible || ( locParent && locParent != _t._batchNode && locParent._shouldBeHidden)) {
-                locQuad.br.vertices = {x: 0, y: 0, z: 0};
-                locQuad.tl.vertices = {x: 0, y: 0, z: 0};
-                locQuad.tr.vertices = {x: 0, y: 0, z: 0};
-                locQuad.bl.vertices = {x: 0, y: 0, z: 0};
+                locQuad.br.vertices = locQuad.tl.vertices = locQuad.tr.vertices = locQuad.bl.vertices = {x: 0, y: 0, z: 0};
                 _t._shouldBeHidden = true;
             } else {
                 _t._shouldBeHidden = false;
@@ -286,7 +287,7 @@ cc._tmp.WebGLSprite = function () {
                     _t._transformToBatch = _t.nodeToParentTransform();
                 } else {
                     //cc.assert(_t._parent instanceof cc.Sprite, "Logic error in CCSprite. Parent must be a CCSprite");
-                    _t._transformToBatch = cc.AffineTransformConcat(_t.nodeToParentTransform(), locParent._transformToBatch);
+                    _t._transformToBatch = cc.affineTransformConcat(_t.nodeToParentTransform(), locParent._transformToBatch);
                 }
 
                 //
@@ -341,7 +342,7 @@ cc._tmp.WebGLSprite = function () {
 
         // recursively iterate over children
         if (_t._hasChildren)
-            _t._arrayMakeObjectsPerformSelector(_t._children, cc.Node.StateCallbackType.updateTransform);
+            _t._arrayMakeObjectsPerformSelector(_t._children, cc.Node._StateCallbackType.updateTransform);
 
         if (cc.SPRITE_DEBUG_DRAW) {
             // draw bounding box
@@ -380,30 +381,29 @@ cc._tmp.WebGLSprite = function () {
         }
 
         //cc.Node already sets isReorderChildDirty_ so _t needs to be after batchNode check
-        cc.NodeRGBA.prototype.addChild.call(_t, child, localZOrder, tag);
+        cc.Node.prototype.addChild.call(_t, child, localZOrder, tag);
         _t._hasChildren = true;
     };
 
     _p.setOpacity = function (opacity) {
-        cc.NodeRGBA.prototype.setOpacity.call(this, opacity);
+        cc.Node.prototype.setOpacity.call(this, opacity);
         this.updateColor();
     };
 
     _p.setColor = function (color3) {
-        cc.NodeRGBA.prototype.setColor.call(this, color3);
+        cc.Node.prototype.setColor.call(this, color3);
         this.updateColor();
     };
 
     _p.updateDisplayedColor = function (parentColor) {
-        cc.NodeRGBA.prototype.updateDisplayedColor.call(this, parentColor);
+        cc.Node.prototype.updateDisplayedColor.call(this, parentColor);
         this.updateColor();
     };
 
     _p.setSpriteFrame = function (newFrame) {
         var _t = this;
-        if(typeof(newFrame) == "string"){
+        if(cc.isString(newFrame)){
             newFrame = cc.spriteFrameCache.getSpriteFrame(newFrame);
-
             cc.assert(newFrame, cc._LogInfos.Sprite_setSpriteFrame);
         }
 
@@ -464,20 +464,27 @@ cc._tmp.WebGLSprite = function () {
             _t._quadDirty = true;
         } else {
             // using batch
-            _t._transformToBatch = cc.AffineTransformIdentity();
+            _t._transformToBatch = cc.affineTransformIdentity();
             _t.textureAtlas = _t._batchNode.textureAtlas; // weak ref
         }
     };
 
     _p.setTexture = function (texture) {
         var _t = this;
-        if(texture && (typeof(texture) === "string")){
+        if(texture && (cc.isString(texture))){
             texture = cc.textureCache.addImage(texture);
             _t.setTexture(texture);
 
             //TODO
             var size = texture.getContentSize();
             _t.setTextureRect(cc.rect(0,0, size.width, size.height));
+            //If image isn't loaded. Listen for the load event.
+            if(!texture._isLoaded){
+                texture.addLoadedEventListener(function(){
+                    var size = texture.getContentSize();
+                    _t.setTextureRect(cc.rect(0,0, size.width, size.height));
+                }, this);
+            }
             return;
         }
         // CCSprite: setTexture doesn't work when the sprite is rendered using a CCSpriteSheet

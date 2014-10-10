@@ -42,7 +42,7 @@ cc.IMAGE_FORMAT_PNG = 1;
  * @constant
  * @type Number
  */
-cc.IMAGE_FORMAT_RAWDATA = 2;
+cc.IMAGE_FORMAT_RAWDATA = 9;
 
 /**
  * @param {Number} x
@@ -70,29 +70,30 @@ cc.NextPOT = function (x) {
  * @extends cc.Node
  *
  * @property {cc.Sprite}    sprite          - The sprite.
+ * @property {cc.Sprite}    clearFlags      - Code for "auto" update.
  * @property {Number}       clearDepthVal   - Clear depth value.
+ * @property {Boolean}      autoDraw        - Indicate auto draw mode activate or not.
  * @property {Number}       clearStencilVal - Clear stencil value.
  * @property {cc.Color}     clearColorVal   - Clear color value, valid only when "autoDraw" is true.
- * @property {Boolean}      autoDraw        - Indicate auto draw mode activate or not.
  */
 cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
 	sprite:null,
 
-	/**
-	 * <p>Code for "auto" update<br/>
-	 * Valid flags: GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_STENCIL_BUFFER_BIT.<br/>
-	 * They can be OR'ed. Valid when "autoDraw is YES.</p>
-	 * @public
-	 */
+	//
+	// <p>Code for "auto" update<br/>
+	// Valid flags: GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_STENCIL_BUFFER_BIT.<br/>
+	// They can be OR'ed. Valid when "autoDraw is YES.</p>
+	// @public
+	//
 	clearFlags:0,
 
 	clearDepthVal:0,
 	autoDraw:false,
 
-    /**
-     * the off-screen canvas for rendering and storing the texture
-     * @type HTMLCanvasElement
-     */
+    //
+    // the off-screen canvas for rendering and storing the texture
+    // @type HTMLCanvasElement
+    //
     _cacheCanvas:null,
     /**
      * stores a reference to the canvas context object
@@ -115,7 +116,12 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
     _clearColorStr:null,
     _className:"RenderTexture",
 
-    ctor: null,
+     //for WebGL
+    _beginWithClearCommand: null,
+    _clearDepthCommand: null,
+    _clearCommand: null,
+    _beginCommand: null,
+    _endCommand: null,
 
     /**
      * creates a RenderTexture object with width and height in Points and a pixel format, only RGB and RGBA formats are valid
@@ -127,16 +133,19 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
      * @example
      * // Example
      * var rt = new cc.RenderTexture(width, height, format, depthStencilFormat)
+     * @function
      */
+    ctor: null,
+
     _ctorForCanvas: function (width, height, format, depthStencilFormat) {
         cc.Node.prototype.ctor.call(this);
-
+        this._cascadeColorEnabled = true;
+        this._cascadeOpacityEnabled = true;
         this._clearColor = cc.color(255, 255, 255, 255);
         this._clearColorStr = "rgba(255,255,255,1)";
 
         this._cacheCanvas = cc.newElement('canvas');
         this._cacheContext = this._cacheCanvas.getContext('2d');
-
         this.anchorX = 0;
 	    this.anchorY = 0;
 
@@ -147,23 +156,17 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
         }
     },
 
-    initRendererCmd: function(){
-        this._rendererCmd = new cc.RenderTextureRenderCmdCanvas(this);
+    _initRendererCmd: function(){
+        //TODO need merge in some code
+        if(cc._renderType === cc._RENDER_TYPE_WEBGL)
+            this._rendererCmd = new cc.RenderTextureRenderCmdWebGL(this);
+
     },
 
-    /**
-     * creates a RenderTexture object with width and height in Points and a pixel format, only RGB and RGBA formats are valid
-     * Constructor of
-     * @param {Number} width
-     * @param {Number} height
-     * @param {cc.IMAGE_FORMAT_JPEG|cc.IMAGE_FORMAT_PNG|cc.IMAGE_FORMAT_RAWDATA} format
-     * @param {Number} depthStencilFormat
-     * @example
-     * // Example
-     * var rt = new cc.RenderTexture(width, height, format, depthStencilFormat)
-     */
     _ctorForWebGL: function (width, height, format, depthStencilFormat) {
         cc.Node.prototype.ctor.call(this);
+        this._cascadeColorEnabled = true;
+        this._cascadeOpacityEnabled = true;
         this._clearColor = cc.color(0, 0, 0, 0);
 
         if(width !== undefined && height !== undefined){
@@ -173,6 +176,10 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
         }
     },
 
+    /**
+     * Clear RenderTexture.
+     * @function
+     */
     cleanup:null,
 
     _cleanupForCanvas:function () {
@@ -197,7 +204,7 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
     },
 
     /**
-     * The sprite
+     * Gets the sprite
      * @return {cc.Sprite}
      */
     getSprite:function () {
@@ -205,6 +212,7 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
     },
 
     /**
+     * Set the sprite
      * @param {cc.Sprite} sprite
      */
     setSprite:function (sprite) {
@@ -212,11 +220,12 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
     },
 
     /**
+     * Initializes the instance of cc.RenderTexture
      * @function
      * @param {Number} width
      * @param {Number} height
-     * @param {cc.IMAGE_FORMAT_JPEG|cc.IMAGE_FORMAT_PNG|cc.IMAGE_FORMAT_RAWDATA} format
-     * @param {Number} depthStencilFormat
+     * @param {cc.IMAGE_FORMAT_JPEG|cc.IMAGE_FORMAT_PNG|cc.IMAGE_FORMAT_RAWDATA} [format]
+     * @param {Number} [depthStencilFormat]
      * @return {Boolean}
      */
     initWithWidthAndHeight: null,
@@ -229,14 +238,12 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
         var texture = new cc.Texture2D();
         texture.initWithElement(locCacheCanvas);
         texture.handleLoadedTexture();
-        this.sprite = cc.Sprite.create(texture);
-        this.addChild(this.sprite);
-
-        var locCmd = this._rendererCmd;
-        locCmd._sprite = this.sprite;
-        locCmd._cacheCanvas = this._cacheCanvas;
-        locCmd._cacheContext = this._cacheContext;
-
+        var locSprite = this.sprite = cc.Sprite.create(texture);
+        locSprite.setBlendFunc(cc.ONE, cc.ONE_MINUS_SRC_ALPHA);
+        // Disabled by default.
+        this.autoDraw = false;
+        // add sprite for backward compatibility
+        this.addChild(locSprite);
         return true;
     },
 
@@ -283,9 +290,8 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
 
         if (cc.configuration.checkForGLExtension("GL_QCOM")) {
             this._textureCopy = new cc.Texture2D();
-            if (!this._textureCopy) {
+            if (!this._textureCopy)
                 return false;
-            }
             this._textureCopy.initWithData(data, this._pixelFormat, powW, powH, cc.size(width, height));
         }
 
@@ -301,11 +307,12 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
             this._depthRenderBuffer = gl.createRenderbuffer();
             gl.bindRenderbuffer(gl.RENDERBUFFER, this._depthRenderBuffer);
             gl.renderbufferStorage(gl.RENDERBUFFER, depthStencilFormat, powW, powH);
-            gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this._depthRenderBuffer);
-
-            // if depth format is the one with stencil part, bind same render buffer as stencil attachment
-            //if (depthStencilFormat == gl.DEPTH24_STENCIL8)
-            //    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this._depthRenderBuffer);
+            if(depthStencilFormat == gl.DEPTH_STENCIL)
+                gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, gl.RENDERBUFFER, this._depthRenderBuffer);
+            else if(depthStencilFormat == gl.STENCIL_INDEX || depthStencilFormat == gl.STENCIL_INDEX8)
+                gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.STENCIL_ATTACHMENT, gl.RENDERBUFFER, this._depthRenderBuffer);
+            else if(depthStencilFormat == gl.DEPTH_COMPONENT16)
+                gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this._depthRenderBuffer);
         }
 
         // check if it worked (probably worth doing :) )
@@ -341,7 +348,7 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
         //cc._renderContext = this._cacheContext;
         //cc.view._setScaleXYForRenderTexture();
 
-        cc.renderer._isRenderTextureOn = true;
+        cc.renderer._isCacheToCanvasOn = true;
 
         /*// Save the current matrix
          cc.kmGLMatrixMode(cc.KM_GL_PROJECTION);
@@ -351,6 +358,8 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
     },
 
     _beginForWebGL: function () {
+        cc.renderer._isCacheToBufferOn = true;
+
         // Save the current matrix
         cc.kmGLMatrixMode(cc.KM_GL_PROJECTION);
         cc.kmGLPushMatrix();
@@ -397,10 +406,10 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
     /**
      * starts rendering to the texture while clearing the texture first.<br/>
      * This is more efficient then calling -clear first and then -begin
-     * @param {Number} r red 0-1
-     * @param {Number} g green 0-1
-     * @param {Number} b blue 0-1
-     * @param {Number} a alpha 0-1 0 is transparent
+     * @param {Number} r red 0-255
+     * @param {Number} g green 0-255
+     * @param {Number} b blue 0-255
+     * @param {Number} a alpha 0-255 0 is transparent
      * @param {Number} [depthValue=]
      * @param {Number} [stencilValue=]
      */
@@ -409,7 +418,7 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
         depthValue = depthValue || gl.COLOR_BUFFER_BIT;
         stencilValue = stencilValue || (gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-        this._beginWithClear(r, g, b, a, depthValue, stencilValue, (gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT));
+        this._beginWithClear(r , g , b , a , depthValue, stencilValue, (gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT));
     },
 
     _beginWithClear: null,
@@ -426,13 +435,18 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
         var context = this._cacheContext;
         var locCanvas = this._cacheCanvas;
         context.save();
-        context.fillStyle = "rgba(" + (0 | (r * 255)) + "," + (0 | (g * 255)) + "," + (0 | (b * 255)) + "," + a + ")";
+        context.fillStyle = "rgba(" + (0 | r) + "," + (0 | g) + "," + (0 | b) + "," + a / 255 + ")";
         context.clearRect(0, 0, locCanvas.width, -locCanvas.height);
         context.fillRect(0, 0, locCanvas.width, -locCanvas.height);
         context.restore();
     },
 
     _beginWithClearForWebGL: function (r, g, b, a, depthValue, stencilValue, flags) {
+        r = r / 255;
+        g = g / 255;
+        b = b / 255;
+        a = a / 255;
+
         this.begin();
 
         var gl = cc._renderContext;
@@ -477,11 +491,11 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
     end: null,
 
     _endForCanvas: function () {
-        //Old code
+        //old code
         //cc._renderContext = cc._mainRenderContextBackup;
         //cc.view._resetScale();
 
-        cc.renderer._renderingForRenderTexture(this._cacheContext);
+        cc.renderer._renderingToCacheCanvas(this._cacheContext);
 
         //TODO
         /*//restore viewport
@@ -493,6 +507,8 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
     },
 
     _endForWebGL: function () {
+        cc.renderer._renderingToBuffer();
+
         var gl = cc._renderContext;
         var director = cc.director;
         gl.bindFramebuffer(gl.FRAMEBUFFER, this._oldFBO);
@@ -529,6 +545,14 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
         this.end();
     },
 
+    /**
+     * clears the texture with rect.
+     * @function
+     * @param {number} x
+     * @param {number} y
+     * @param {number} width
+     * @param {number} height
+     */
     clearRect:null,
 
     _clearRectForCanvas:function(x, y, width, height){
@@ -588,6 +612,11 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
         gl.clearStencil(stencilClearValue);
     },
 
+    /**
+     * Recursive method that visit its children and draw them
+     * @function
+     * @param {CanvasRenderingContext2D|WebGLRenderingContext} ctx
+     */
     visit:null,
 
     _visitForCanvas:function (ctx) {
@@ -597,14 +626,8 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
             return;
 
         ctx = ctx || cc._renderContext;
-        //ctx.save();
-
-        //this.draw(ctx);                                                   // update children of RenderTexture before
         this.transform(ctx);
-        this.toRenderer();
-        this.sprite.visit(ctx);                                        // draw the RenderTexture
-
-        //ctx.restore();
+        this.sprite.visit(ctx);                                             // draw the RenderTexture
 
         this.arrivalOrder = 0;
     },
@@ -617,24 +640,34 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
 
         cc.kmGLPushMatrix();
 
-        var locGrid = this.grid;
+/*        var locGrid = this.grid;
         if (locGrid && locGrid.isActive()) {
             locGrid.beforeDraw();
             this.transformAncestors();
-        }
+        }*/
 
         this.transform(ctx);
-        this.sprite.visit();
-        this.draw(ctx);
+        //this.toRenderer();
 
-        if (locGrid && locGrid.isActive())
-            locGrid.afterDraw(this);
+        this.sprite.visit();
+        //this.draw(ctx);
+        if(this._rendererCmd)
+            cc.renderer.pushRenderCommand(this._rendererCmd);
+
+        //TODO GridNode
+/*        if (locGrid && locGrid.isActive())
+            locGrid.afterDraw(this);*/
 
         cc.kmGLPopMatrix();
 
         this.arrivalOrder = 0;
     },
 
+    /**
+     * Render function using the canvas 2d context or WebGL context, internal usage only, please do not call this function
+     * @function
+     * @param {CanvasRenderingContext2D | WebGLRenderingContext} ctx The render context
+     */
     draw:null,
 
     _drawForCanvas: function (ctx) {
@@ -661,7 +694,6 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
                 if (getChild != selfSprite)
                     getChild.visit();
             }
-
             this.end();
         }
     },
@@ -770,6 +802,10 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
         return this.clearFlags;
     },
 
+    /**
+     * Set the clearFlags
+     * @param {Number} clearFlags
+     */
     setClearFlags:function (clearFlags) {
         this.clearFlags = clearFlags;
     },
@@ -816,6 +852,10 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
         return this.clearDepthVal;
     },
 
+    /**
+     * Set value for clearDepth. Valid only when autoDraw is true.
+     * @param {Number} clearDepth
+     */
     setClearDepth:function (clearDepth) {
         this.clearDepthVal = clearDepth;
     },
@@ -828,12 +868,16 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
         return this.clearStencilVal;
     },
 
+    /**
+     * Set value for clear Stencil. Valid only when autoDraw is true
+     * @return {Number}
+     */
     setClearStencil:function (clearStencil) {
         this.clearStencilVal = clearStencil;
     },
 
     /**
-     * When enabled, it will render its children into the texture automatically. Disabled by default for compatibility reasons. <br/>
+     * When enabled, it will render its children into the texture automatically. Disabled by default for compatiblity reasons. <br/>
      * Will be enabled in the future.
      * @return {Boolean}
      */
@@ -841,18 +885,13 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
         return this.autoDraw;
     },
 
+    /**
+     * When enabled, it will render its children into the texture automatically. Disabled by default for compatiblity reasons. <br/>
+     * Will be enabled in the future.
+     * @return {Boolean}
+     */
     setAutoDraw:function (autoDraw) {
         this.autoDraw = autoDraw;
-    },
-
-    toRenderer: function(){
-        if(!this._rendererCmd)
-            return;
-
-        var locCmd = this._rendererCmd;
-        locCmd._clearFlags = this.clearFlags;
-        locCmd.autoDraw = this.autoDraw;
-        locCmd._sprite = this.sprite;
     }
 });
 
@@ -894,6 +933,7 @@ cc.defineGetterSetter(_p, "clearColorVal", _p.getClearColor, _p.setClearColor);
 
 /**
  * creates a RenderTexture object with width and height in Points and a pixel format, only RGB and RGBA formats are valid
+ * @deprecated since v3.0 please use new cc.RenderTexture() instead.
  * @param {Number} width
  * @param {Number} height
  * @param {cc.IMAGE_FORMAT_JPEG|cc.IMAGE_FORMAT_PNG|cc.IMAGE_FORMAT_RAWDATA} format

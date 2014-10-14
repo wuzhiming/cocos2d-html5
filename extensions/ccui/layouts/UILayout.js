@@ -610,7 +610,7 @@ ccui.Layout = ccui.Widget.extend(/** @lends ccui.Layout# */{
                 if (able){
                     this._clippingStencil = cc.DrawNode.create();
                     if(cc._renderType === cc._RENDER_TYPE_CANVAS)
-                        this._clippingStencil.draw = this.__stencilDraw.bind(this);
+                        this._clippingStencil._rendererCmd.rendering = this.__stencilDraw.bind(this);
                     if (this._running)
                         this._clippingStencil.onEnter();
                     this._setStencilClippingSize(this._contentSize);
@@ -632,6 +632,10 @@ ccui.Layout = ccui.Widget.extend(/** @lends ccui.Layout# */{
     setClippingType: function (type) {
         if (type == this._clippingType)
             return;
+        if(cc._renderType === cc._RENDER_TYPE_CANVAS && type == ccui.Layout.CLIPPING_SCISSOR){
+            cc.log("Only supports STENCIL on canvas mode.");
+            return;
+        }
         var clippingEnabled = this.isClippingEnabled();
         this.setClippingEnabled(false);
         this._clippingType = type;
@@ -1801,6 +1805,16 @@ ccui.Layout = ccui.Widget.extend(/** @lends ccui.Layout# */{
         this.setClippingType(layout._clippingType);
         this._loopFocus = layout._loopFocus;
         this.__passFocusToChild = layout.__passFocusToChild;
+    },
+
+    _transformForRenderer: function(parentMatrix){
+        if(cc._renderType === cc._RENDER_TYPE_WEBGL){
+            ccui.Widget.prototype._transformForRenderer.call(this, parentMatrix);
+            if(this._clippingStencil)
+                this._clippingStencil._transformForRenderer(this._stackMatrix);
+        }else{
+            ccui.ProtectedNode.prototype._transformForRenderer.call(this);
+        }
     }
 });
 ccui.Layout._init_once = null;

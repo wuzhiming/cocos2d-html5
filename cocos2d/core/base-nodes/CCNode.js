@@ -1352,6 +1352,7 @@ cc.Node = cc.Class.extend(/** @lends cc.Node# */{
             this._detachChild(child, cleanup);
 
         this.setNodeDirty();
+        cc.renderer.childrenOrderDirty = true;
     },
 
     /**
@@ -2623,7 +2624,6 @@ if (cc._renderType === cc._RENDER_TYPE_CANVAS) {
             if(this._rendererCmd)
                 cc.renderer.pushRenderCommand(this._rendererCmd);
         }
-        _t.arrivalOrder = 0;
     };
 
     _p._transformForRenderer = function () {
@@ -2635,7 +2635,7 @@ if (cc._renderType === cc._RENDER_TYPE_CANVAS) {
             worldT.b = t.a * pt.b + t.b * pt.d;                               //b
             worldT.c = t.c * pt.a + t.d * pt.c;                               //c
             worldT.d = t.c * pt.b + t.d * pt.d;                               //d
-            if(this._skewX || this._skewY){
+            if(!this._skewX || this._skewY){
                 var plt = this._parent._transform;
                 var xOffset = -(plt.b + plt.c) * t.ty ;
                 var yOffset = -(plt.b + plt.c) * t.tx;

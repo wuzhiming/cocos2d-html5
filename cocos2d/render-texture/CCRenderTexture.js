@@ -158,11 +158,9 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
 
     _initRendererCmd: function(){
         //TODO need merge in some code
-        if(cc._renderType === cc._RENDER_TYPE_CANVAS)
-            this._rendererCmd = new cc.RenderTextureRenderCmdCanvas(this);
-        else{
+        if(cc._renderType === cc._RENDER_TYPE_WEBGL)
             this._rendererCmd = new cc.RenderTextureRenderCmdWebGL(this);
-        }
+
     },
 
     _ctorForWebGL: function (width, height, format, depthStencilFormat) {
@@ -246,10 +244,6 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
         this.autoDraw = false;
         // add sprite for backward compatibility
         this.addChild(locSprite);
-        var locCmd = this._rendererCmd;
-        locCmd._sprite = this.sprite;
-        locCmd._cacheCanvas = this._cacheCanvas;
-        locCmd._cacheContext = this._cacheContext;
         return true;
     },
 
@@ -634,8 +628,6 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
         ctx = ctx || cc._renderContext;
         this.transform(ctx);
         this.sprite.visit(ctx);                                             // draw the RenderTexture
-
-        this.arrivalOrder = 0;
     },
 
     _visitForWebGL:function (ctx) {
@@ -665,8 +657,6 @@ cc.RenderTexture = cc.Node.extend(/** @lends cc.RenderTexture# */{
             locGrid.afterDraw(this);*/
 
         cc.kmGLPopMatrix();
-
-        this.arrivalOrder = 0;
     },
 
     /**

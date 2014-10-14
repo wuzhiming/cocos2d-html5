@@ -244,7 +244,7 @@ cc.AsyncPool = function(srcObj, limit, iterator, onEnd, target){
                 self._isErr = true;
                 if(self._onEnd)
                     self._onEnd.call(self._onEndTarget, err);
-                return
+                return;
             }
 
             var arr = Array.prototype.slice.call(arguments, 1);
@@ -252,7 +252,7 @@ cc.AsyncPool = function(srcObj, limit, iterator, onEnd, target){
             if(self.finishedSize == self.size) {
                 if(self._onEnd)
                     self._onEnd.call(self._onEndTarget, null, self._results);
-                return
+                return;
             }
             self._handleItem();
         }.bind(item), self);
@@ -419,7 +419,7 @@ cc.path = /** @lends cc.path# */{
             if(idx !== -1)
                return fileName.substring(0,idx);
         }
-        return fileName
+        return fileName;
     },
 
     /**
@@ -1541,7 +1541,7 @@ cc._initSys = function (config, CONFIG_KEY) {
     var renderType = cc._RENDER_TYPE_WEBGL;
     var tempCanvas = cc.newElement("Canvas");
     cc._supportRender = true;
-    var notSupportGL = browserSupportWebGL.indexOf(sys.browserType) == -1 || osSupportWebGL.indexOf(sys.os) == -1;
+    var notSupportGL = !window.WebGLRenderingContext || browserSupportWebGL.indexOf(sys.browserType) == -1 || osSupportWebGL.indexOf(sys.os) == -1;
     if (userRenderMode === 1 || (userRenderMode === 0 && notSupportGL) || (location.origin == "file://")) {
         renderType = cc._RENDER_TYPE_CANVAS;
     }
@@ -2008,6 +2008,8 @@ cc.game = /** @lends cc.game# */{
         callback = function () {
             if (!self._paused) {
                 director.mainLoop();
+                if(self._intervalId)
+                    window.cancelAnimationFrame(self._intervalId);
                 self._intervalId = window.requestAnimFrame(callback);
             }
         };

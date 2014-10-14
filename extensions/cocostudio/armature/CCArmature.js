@@ -71,10 +71,14 @@ ccs.Armature = ccs.Node.extend(/** @lends ccs.Armature# */{
         this._armatureTransformDirty = true;
         this._realAnchorPointInPoints = cc.p(0, 0);
         name && ccs.Armature.prototype.init.call(this, name, parentBone);
+    },
 
+    _initRendererCmd:function () {
         if(cc._renderType === cc._RENDER_TYPE_CANVAS){
             this._rendererStartCmd = new cc.CustomRenderCmdCanvas(this, this._startRendererCmdForCanvas);
             this._rendererEndCmd = new cc.CustomRenderCmdCanvas(this, this._endRendererCmdForCanvas);
+        }else{
+            this._rendererCmd = new cc.ArmatureRenderCmdWebGL(this);
         }
     },
 
@@ -471,19 +475,17 @@ ccs.Armature = ccs.Node.extend(/** @lends ccs.Armature# */{
         if(this._rendererEndCmd)
             cc.renderer.pushRenderCommand(this._rendererEndCmd);
 
-        // reset for next frame
         this._cacheDirty = false;
-        this.arrivalOrder = 0;
 
         context.restore();
     },
 
-    _startRendererCmdForCanvas: function(ctx){
+    _startRendererCmdForCanvas: function(ctx, scaleX, scaleY){
         var context = ctx || cc._renderContext;
         context.save();
         this.transform(context);
         var t = this._transformWorld;
-        ctx.transform(t.a, t.b, t.c, t.d, t.tx, -t.ty);
+        ctx.transform(t.a, t.b, t.c, t.d, t.tx * scaleX, -t.ty * scaleY);
 
         var locChildren = this._children;
         for (var i = 0, len = locChildren.length; i< len; i++) {
@@ -494,7 +496,7 @@ ccs.Armature = ccs.Node.extend(/** @lends ccs.Armature# */{
                 if (null == node)
                     continue;
 
-                node.visit();
+                node._transformForRenderer();
             }
         }
     },
@@ -502,9 +504,7 @@ ccs.Armature = ccs.Node.extend(/** @lends ccs.Armature# */{
     _endRendererCmdForCanvas: function(ctx){
         var context = ctx || cc._renderContext;
 
-        // reset for next frame
         this._cacheDirty = false;
-        this.arrivalOrder = 0;
 
         context.restore();
     },
@@ -523,10 +523,9 @@ ccs.Armature = ccs.Node.extend(/** @lends ccs.Armature# */{
         this.transform();
 
         this.sortAllChildren();
-        this.draw(context);
+        //this.draw(context);
+        cc.renderer.pushRenderCommand(this._rendererCmd);
 
-        // reset for next frame
-        this.arrivalOrder = 0;
         currentStack.top = currentStack.stack.pop();
     },
 
@@ -725,6 +724,24 @@ ccs.Armature = ccs.Node.extend(/** @lends ccs.Armature# */{
      */
     setVersion: function (version) {
         this.version = version;
+    },
+
+    _transformForRenderer: function(){
+
+        ccs.Node.prototype._transformForRenderer.call(this);
+
+        var locChildren = this._children;
+        for (var i = 0, len = locChildren.length; i< len; i++) {
+            var selBone = locChildren[i];
+            if (selBone && selBone.getDisplayRenderNode) {
+                var node = selBone.getDisplayRenderNode();
+
+                if (null == node)
+                    continue;
+
+                node._transformForRenderer();
+            }
+        }
     }
 });
 
